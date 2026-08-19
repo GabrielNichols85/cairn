@@ -11,7 +11,8 @@
    ============================================================ */
 import { el, clamp, fmtDate, debounce } from '../util.js';
 import { prayers } from '../store.js';
-import { toast, modal, confirmDialog } from '../ui.js';
+import { circles, sharing, circlesAvailable } from '../circles.js';
+import { toast, modal, confirmDialog, checkSvg } from '../ui.js';
 
 const NOTE_W = 186, NOTE_H = 108;
 const CANVAS_MIN = 720;
@@ -59,7 +60,23 @@ export function renderWall(root, ctx) {
       ));
     }
     list.slice().reverse().forEach((p) => wall.append(noteEl(p)));
+    markShared(list.map((p) => p.id));
   };
+
+  /* A shared prayer must never look like a private one. */
+  function markShared(ids) {
+    if (!circlesAvailable() || !ids.length) return;
+    Promise.all([sharing.forPrayers(ids), circles.list()]).then(([map, all]) => {
+      const names = Object.fromEntries(all.map((c) => [c.id, c.name]));
+      Object.entries(map).forEach(([prayerId, circleIds]) => {
+        const node = wall.querySelector(`.note[data-id="${prayerId}"]`);
+        if (!node || node.querySelector('.note-shared')) return;
+        const label = circleIds.map((cid) => names[cid]).filter(Boolean).join(', ');
+        node.classList.add('is-shared');
+        node.append(el('div', { class: 'note-shared', title: `Shared with ${label}` }, `shared with ${label || 'a circle'}`));
+      });
+    }).catch(() => {});
+  }
 
   function noteEl(p, isNew = false) {
     const n = el('div', { class: `note c${p.color || 1}${isNew ? ' is-new' : ''}`, dataset: { id: p.id } });
@@ -84,12 +101,17 @@ export function renderWall(root, ctx) {
       onclick: (e) => { e.stopPropagation(); removePrayer(p, n); },
     }, '\u00D7');
 
+    const shareBtn = circlesAvailable() ? el('button', {
+      class: 'note-tool share', type: 'button', title: 'Share with a circle', 'aria-label': 'Share with a circle',
+      onclick: (e) => { e.stopPropagation(); shareDialog(p, n); },
+    }, '\u25CC') : null;
+
     const dateEl = el('span', { class: 'note-date', text: `prayed ${fmtDate(p.createdAt, { month: 'short', day: 'numeric' })}` });
 
     if (canvasMode) {
       // Board: date tucked in the corner, tools revealed on hover.
       n.append(dateEl);
-      n.append(el('div', { class: 'note-tools' }, colorBtn, delBtn));
+      n.append(el('div', { class: 'note-tools' }, shareBtn, colorBtn, delBtn));
     } else {
       // Phone: one honest row of controls, nothing overlapping anything.
       n.append(el('div', { class: 'note-foot' },
@@ -99,6 +121,7 @@ export function renderWall(root, ctx) {
           class: 'note-answer-btn', type: 'button',
           onclick: (e) => { e.stopPropagation(); askAnswered(p, n); },
         }, '\u2713 Answered'),
+        shareBtn,
         colorBtn,
         delBtn,
       ));
@@ -279,4 +302,71 @@ export function renderWall(root, ctx) {
   };
   window.addEventListener('resize', onResize);
   return () => window.removeEventListener('resize', onResize);
+}
+
+/* ============================================================
+   Sharing a single prayer into circles.
+
+   Deliberately per prayer. Sharing a whole wall means finding
+   out what you exposed after you exposed it.
+   ============================================================ */
+function shareDialog(p, node) {
+  const body = el('div', {}, el('div', { class: 'scripture-loading', text: 'Loading your circles\u2026' }));
+
+  modal({
+    title: 'Share this prayer',
+    subtitle: (p.body || '').trim().slice(0, 120),
+    content: body,
+    actions: [{ label: 'Done', variant: 'primary' }],
+  });
+
+  Promise.all([circles.list(), sharing.forPrayer(p.id)]).then(([all, current]) => {
+    if (!all.length) {
+      body.replaceChildren(
+        el('p', { class: 'set-s', text: 'You are not in any circles yet. Make one, or join with a link, and this prayer can be shared with them.' }),
+      );
+      return;
+    }
+    const chosen = new Set(current);
+    const rows = all.map((c) => {
+      const cb = el('input', { type: 'checkbox' });
+      cb.checked = chosen.has(c.id);
+      cb.addEventListener('change', async () => {
+        cb.disabled = true;
+        try {
+          if (cb.checked) { await sharing.share(p.id, c.id); toast(`Shared with ${c.name}.`); }
+          else { await sharing.unshare(p.id, c.id); toast(`Removed from ${c.name}.`); }
+          refreshBadge(p, node);
+        } catch {
+          cb.checked = !cb.checked;
+          toast('Could not change that.');
+        }
+        cb.disabled = false;
+      });
+      return el('label', { class: 'set-row', style: 'cursor:pointer' },
+        el('span', {},
+          el('div', { class: 'set-t', text: c.name }),
+          el('div', { class: 'set-s', text: `${c.memberCount} ${c.memberCount === 1 ? 'person' : 'people'} will be able to read this` }),
+        ),
+        el('span', { class: 'spacer' }),
+        el('span', { class: 'check' }, cb, checkSvg()),
+      );
+    });
+    body.replaceChildren(...rows,
+      el('div', { class: 'hint', style: 'margin-top:12px', text: 'Everything else on your wall stays private. Unshare at any time and it disappears from the circle immediately.' }),
+    );
+  }).catch(() => {
+    body.replaceChildren(el('div', { class: 'callout', text: 'Could not load your circles.' }));
+  });
+}
+
+function refreshBadge(p, node) {
+  Promise.all([sharing.forPrayer(p.id), circles.list()]).then(([ids, all]) => {
+    const names = Object.fromEntries(all.map((c) => [c.id, c.name]));
+    node.querySelector('.note-shared')?.remove();
+    node.classList.toggle('is-shared', ids.length > 0);
+    if (!ids.length) return;
+    const label = ids.map((id) => names[id]).filter(Boolean).join(', ');
+    node.append(el('div', { class: 'note-shared', title: `Shared with ${label}` }, `shared with ${label}`));
+  }).catch(() => {});
 }
