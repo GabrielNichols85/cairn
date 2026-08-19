@@ -8,7 +8,7 @@
 
 const BANK = [
   /* people */
-  ['Who showed you kindness recently — even in something small?',
+  ['Who showed you kindness recently, even in something small?',
    'Which person are you glad to have in your life today?',
    'Who has God used to teach you something this year?',
    'Whose voice did you hear this week that you needed to hear?',
