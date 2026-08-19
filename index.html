@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Cairn — a place to remember what God has done</title>
+<meta name="description" content="A private prayer wall and journal that remembers your answered prayers and brings them back to you." />
+<meta name="theme-color" content="#FAF8F5" />
+<link rel="manifest" href="./app.webmanifest" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234F6F5E'/%3E%3Cellipse cx='16' cy='23' rx='9' ry='3.4' fill='%23FAF8F5'/%3E%3Cellipse cx='16' cy='17' rx='6.6' ry='3' fill='%23FAF8F5'/%3E%3Cellipse cx='16' cy='11.6' rx='4.4' ry='2.5' fill='%23FAF8F5'/%3E%3C/svg%3E" />
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta property="og:title" content="Cairn — a place to remember what God has done" />
+<meta property="og:description" content="A private prayer wall and journal that brings your answered prayers back to you." />
+<meta property="og:type" content="website" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" />
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+<div id="boot" class="boot"><div class="boot-mark" aria-hidden="true"></div></div>
+
+<div id="app" class="app" hidden>
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" width="26" height="26"><ellipse cx="16" cy="24" rx="9.5" ry="3.6"/><ellipse cx="16" cy="17.4" rx="7" ry="3.1"/><ellipse cx="16" cy="11.6" rx="4.6" ry="2.6"/><ellipse cx="16" cy="6.8" rx="2.8" ry="1.8"/></svg>
+      </span>
+      <span class="brand-text">Cairn</span>
+    </div>
+
+    <nav class="nav" id="nav" aria-label="Main">
+      <button class="nav-item" data-route="today"><span class="nav-ico" data-ico="today"></span><span>Today</span></button>
+      <button class="nav-item" data-route="wall"><span class="nav-ico" data-ico="wall"></span><span>Prayer wall</span></button>
+      <button class="nav-item" data-route="answered"><span class="nav-ico" data-ico="answered"></span><span>Answered</span><span class="nav-count" id="answeredCount"></span></button>
+      <button class="nav-item" data-route="journal"><span class="nav-ico" data-ico="journal"></span><span>Journal</span></button>
+      <button class="nav-item" data-route="settings"><span class="nav-ico" data-ico="settings"></span><span>Settings</span></button>
+    </nav>
+
+    <div class="sidebar-foot">
+      <a class="support-btn" id="supportBtn" href="#" target="_blank" rel="noopener">
+        <span class="support-ico" aria-hidden="true">♥</span> Support the creator
+      </a>
+      <div class="sidebar-account" id="sidebarAccount"></div>
+    </div>
+  </aside>
+
+  <main class="main" id="main" tabindex="-1"></main>
+
+  <nav class="tabbar" id="tabbar" aria-label="Main">
+    <button class="tab" data-route="today"><span class="nav-ico" data-ico="today"></span><span>Today</span></button>
+    <button class="tab" data-route="wall"><span class="nav-ico" data-ico="wall"></span><span>Wall</span></button>
+    <button class="tab" data-route="answered"><span class="nav-ico" data-ico="answered"></span><span>Answered</span></button>
+    <button class="tab" data-route="journal"><span class="nav-ico" data-ico="journal"></span><span>Journal</span></button>
+    <button class="tab" data-route="settings"><span class="nav-ico" data-ico="settings"></span><span>More</span></button>
+  </nav>
+</div>
+
+<div id="modalRoot" class="modal-root" hidden></div>
+<div id="toastRoot" class="toast-root" aria-live="polite"></div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
