@@ -43,7 +43,7 @@ export function renderToday(root, ctx) {
         el('div', { class: 'eyebrow', text: 'Remember' }),
         el('p', {
           class: 'page-sub', style: 'margin-top:2px',
-          text: 'When a prayer on your wall is answered, drag it to the answered ribbon. Cairn will bring it back to you here — months and years later — so you do not forget what God did.',
+          text: 'When a prayer on your wall is answered, drag it to the answered ribbon. Cairn will bring it back to you here, months and years later, so you do not forget what God did.',
         }),
       ));
       return;
@@ -93,7 +93,7 @@ export function renderToday(root, ctx) {
     el('div', { class: 'eyebrow', text: "Today's reading" }),
     el('div', { class: 'scripture-day' },
       el('span', { text: `Day ${r.dayNumber} of ${r.total} · the New Testament, start to finish` }),
-      el('span', { class: 'translation-pill', title: 'Public domain — free to read and share' }, TRANSLATION),
+      el('span', { class: 'translation-pill', title: 'Public domain, free to read and share' }, TRANSLATION),
     ),
   );
 
@@ -132,7 +132,7 @@ export function renderToday(root, ctx) {
     el('button', { class: 'quick', type: 'button', onclick: () => ctx.go('journal', { mode: 'gratitude' }) },
       el('span', { class: 'quick-ico' }, quickIcon('sun')),
       el('span', {},
-        el('div', { class: 'quick-t', text: todayGratitude ? 'Thankful list — done today' : 'Five things you are thankful for' }),
+        el('div', { class: 'quick-t', text: todayGratitude ? 'Thankful list, done today' : 'Five things you are thankful for' }),
         el('div', { class: 'quick-s', text: todayGratitude ? 'Tap to look back at it' : 'Guided, takes two minutes' }),
       ),
     ),
@@ -182,7 +182,7 @@ function passageBlock(reference, { primary }) {
     })
     .catch(() => {
       slot.replaceWith(el('div', { class: 'callout', style: 'margin-top:12px' },
-        'The text could not be loaded right now — you may be offline. ',
+        'The text could not be loaded right now. You may be offline. ',
         el('a', { href: gatewayUrl(reference), target: '_blank', rel: 'noopener', text: `Read ${reference} elsewhere →` }),
       ));
     });

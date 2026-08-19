@@ -35,7 +35,7 @@ export function renderSettings(root, ctx) {
       'Saving to this browser',
       isConfigured()
         ? 'Sync is configured but could not be reached. Your data is safe in this browser in the meantime.'
-        : 'Cloud sync is not set up yet. Everything works — it just lives in this browser. Export a backup any time below.',
+        : 'Cloud sync is not set up yet. Everything works, it just lives in this browser. Export a backup any time below.',
       null,
     ));
   }
@@ -75,7 +75,7 @@ export function renderSettings(root, ctx) {
     const email = el('input', { class: 'field', type: 'email', name: 'email', placeholder: 'you@example.com', required: true, style: 'max-width:230px' });
     const form = el('form', {
       class: 'row', action: CONFIG.emailListAction, method: 'post', target: '_blank',
-      style: 'gap:8px', onsubmit: () => setTimeout(() => toast('Thanks — check your inbox to confirm.'), 200),
+      style: 'gap:8px', onsubmit: () => setTimeout(() => toast('Thanks, check your inbox to confirm.'), 200),
     }, email, el('button', { class: 'btn btn-primary btn-sm', type: 'submit' }, 'Join'));
     support.append(row('Occasional updates', 'A short email when something new ships. No spam, unsubscribe any time.', form));
   }
@@ -93,7 +93,7 @@ export function renderSettings(root, ctx) {
       el('strong', { text: 'Your prayers are yours.' }),
     ),
     el('div', { html:
-      'There are no ads, no trackers, and no analytics in Cairn. Nothing you write is shown to anyone else, ever — there is no feed, no sharing, no public wall. ' +
+      'There are no ads, no trackers, and no analytics in Cairn. Nothing you write is shown to anyone else, ever. There is no feed, no sharing, and no public wall. ' +
       (store.user
         ? 'Your entries are stored in your own row of the database, locked so that only your signed-in account can read them.'
         : 'Right now everything is stored in this browser and never leaves your device.') +
@@ -131,7 +131,7 @@ export function renderSettings(root, ctx) {
   wrap.append(data);
 
   wrap.append(el('div', { style: 'text-align:center;margin-top:34px;font-size:12.5px;color:var(--muted)' },
-    `${CONFIG.appName} — ${CONFIG.tagline}`,
+    `${CONFIG.appName} · ${CONFIG.tagline}`,
   ));
 
   root.replaceChildren(wrap);

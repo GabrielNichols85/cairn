@@ -259,7 +259,7 @@ export function renderWall(root, ctx) {
   function removePrayer(p, n) {
     confirmDialog({
       title: 'Delete this prayer?',
-      subtitle: 'It will not move to Answered — it will be gone.',
+      subtitle: 'It will not move to Answered. It will be gone.',
       onConfirm: () => {
         const copy = prayers.remove(p.id);
         n.classList.add('leaving');
