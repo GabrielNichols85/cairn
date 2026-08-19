@@ -12,6 +12,7 @@ export const ICONS = {
   wall: S(`<rect x='3.2' y='3.2' width='7.2' height='7.2' rx='1.8'/><rect x='13.6' y='3.2' width='7.2' height='7.2' rx='1.8'/><rect x='3.2' y='13.6' width='7.2' height='7.2' rx='1.8'/><rect x='13.6' y='13.6' width='7.2' height='7.2' rx='1.8'/>`),
   answered: S(`<circle cx='12' cy='12' r='9'/><path d='m8.2 12.3 2.5 2.5 5.1-5.4'/>`),
   journal: S(`<path d='M5.5 4.2A2.2 2.2 0 0 1 7.7 2H19v20H7.7a2.2 2.2 0 0 1-2.2-2.2z'/><path d='M5.5 17.4h13.5'/><path d='M9.5 7h5.5'/>`),
+  circles: S(`<circle cx='9' cy='9.2' r='3.4'/><circle cx='16' cy='14.6' r='3.4'/><path d='M3.4 20.2a6 6 0 0 1 9.2-3.4'/><path d='M11.2 6.4a6 6 0 0 1 8.6 8.6'/>`),
   settings: S(`<path d='M3.5 7h17M3.5 12h17M3.5 17h17'/><circle cx='9' cy='7' r='2.1' fill='%23fff'/><circle cx='15' cy='12' r='2.1' fill='%23fff'/><circle cx='8' cy='17' r='2.1' fill='%23fff'/>`),
 };
 
