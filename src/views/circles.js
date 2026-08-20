@@ -6,7 +6,7 @@
    circle, one at a time, on purpose.
    ============================================================ */
 import { el, fmtDate, waitText } from '../util.js';
-import { circles, circleWall, circlesAvailable, me } from '../circles.js';
+import { circles, circleWall, circlesAvailable, cloudReady, pendingJoin, me } from '../circles.js';
 import { modal, closeModal, toast, confirmDialog } from '../ui.js';
 
 const SORTS = [
@@ -17,8 +17,10 @@ const SORTS = [
 ];
 
 export function renderCircles(root, ctx, params = {}) {
-  if (!circlesAvailable()) return renderSignedOut(root, ctx);
+  // An invite comes first. Somebody arriving from a link has not signed in yet,
+  // and turning them away at the door loses the invite.
   if (params.join) return renderJoin(root, ctx, params.join);
+  if (!circlesAvailable()) return renderSignedOut(root, ctx);
   if (params.id) return renderCircle(root, ctx, params);
   return renderIndex(root, ctx);
 }
@@ -136,6 +138,11 @@ function renderJoin(root, ctx, token) {
   );
   root.replaceChildren(el('div', { class: 'wrap' }, box));
 
+  if (!cloudReady()) {
+    box.replaceChildren(el('div', { class: 'callout', text: 'This copy of Cairn is not set up for accounts, so invites cannot be opened here.' }));
+    return;
+  }
+
   circles.preview(token).then((info) => {
     if (!info) {
       box.replaceChildren(
@@ -152,17 +159,23 @@ function renderJoin(root, ctx, token) {
       el('h2', { class: 'page-title', style: 'margin:6px 0 4px', text: info.name }),
       el('p', { class: 'page-sub', style: 'margin:0 auto', text: `${info.member_count} ${info.member_count === 1 ? 'person is' : 'people are'} in this circle. You will be able to see prayers they have shared, including ones shared before you joined.` }),
       el('div', { class: 'row', style: 'justify-content:center;margin-top:20px' },
-        el('button', {
-          class: 'btn btn-primary', type: 'button',
-          onclick: (e) => {
-            e.currentTarget.disabled = true;
-            circles.join(token)
-              .then((id) => { toast(`You are in ${info.name}.`); ctx.go('circles', { id, name: info.name }); })
-              .catch(() => { toast('Could not join that circle.'); e.currentTarget.disabled = false; });
-          },
-        }, 'Join this circle'),
+        circlesAvailable()
+          ? el('button', {
+              class: 'btn btn-primary', type: 'button',
+              onclick: (e) => {
+                e.currentTarget.disabled = true;
+                circles.join(token)
+                  .then((id) => { toast(`You are in ${info.name}.`); ctx.go('circles', { id, name: info.name }); })
+                  .catch(() => { toast('Could not join that circle.'); e.currentTarget.disabled = false; });
+              },
+            }, 'Join this circle')
+          : el('button', {
+              class: 'btn btn-primary', type: 'button',
+              onclick: () => { pendingJoin.set(token); ctx.showAuth(); },
+            }, 'Sign in to join'),
         el('button', { class: 'btn btn-ghost', type: 'button', onclick: () => ctx.go('today') }, 'Not now'),
       ),
+      circlesAvailable() ? null : el('p', { class: 'hint', style: 'margin-top:12px', text: 'Cairn will bring you straight back here once you are signed in.' }),
     );
   }).catch(() => {
     box.replaceChildren(el('div', { class: 'callout', text: 'Could not check that invite right now.' }));
