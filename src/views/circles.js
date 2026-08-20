@@ -154,7 +154,7 @@ function renderJoin(root, ctx, token) {
       );
       return;
     }
-    box.replaceChildren(
+    const parts = [
       el('div', { class: 'eyebrow', text: 'You have been invited to' }),
       el('h2', { class: 'page-title', style: 'margin:6px 0 4px', text: info.name }),
       el('p', { class: 'page-sub', style: 'margin:0 auto', text: `${info.member_count} ${info.member_count === 1 ? 'person is' : 'people are'} in this circle. You will be able to see prayers they have shared, including ones shared before you joined.` }),
@@ -176,7 +176,8 @@ function renderJoin(root, ctx, token) {
         el('button', { class: 'btn btn-ghost', type: 'button', onclick: () => ctx.go('today') }, 'Not now'),
       ),
       circlesAvailable() ? null : el('p', { class: 'hint', style: 'margin-top:12px', text: 'Cairn will bring you straight back here once you are signed in.' }),
-    );
+    ];
+    box.replaceChildren(...parts.filter(Boolean));
   }).catch(() => {
     box.replaceChildren(el('div', { class: 'callout', text: 'Could not check that invite right now.' }));
   });
