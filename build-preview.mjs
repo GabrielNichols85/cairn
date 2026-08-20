@@ -24,10 +24,10 @@ let html = read('/index.html');
 
 // strip the tags the single file replaces
 html = html
-  .replace(/<link rel="stylesheet" href="\.\/styles\.css" \/>\s*/, `<style>\n${css}\n</style>\n`)
+  .replace(/<link rel="stylesheet" href="\.?\/styles\.css" \/>\s*/, `<style>\n${css}\n</style>\n`)
   .replace(/<link rel="manifest"[^>]*>\s*/, '')
   .replace(/<link rel="apple-touch-icon"[^>]*>\s*/, '')
-  .replace(/<script type="module" src="\.\/src\/main\.js"><\/script>/, '');
+  .replace(/<script type="module" src="\.?\/src\/main\.js"><\/script>/, '');
 
 const payload = MODULES.map((path) =>
   `<script type="text/cairn-module" data-path="${path}">\n${esc(read(path))}\n</script>`
