@@ -10,12 +10,15 @@ import { renderWall } from './views/wall.js';
 import { renderAnswered } from './views/answered.js';
 import { renderJournal } from './views/journal.js';
 import { renderSettings } from './views/settings.js';
+import { renderCircles } from './views/circles.js';
+import { syncProfile, circles as circlesApi, circlesAvailable, pendingJoin } from './circles.js';
 
 const ROUTES = {
   today: renderToday,
   wall: renderWall,
   answered: renderAnswered,
   journal: renderJournal,
+  circles: renderCircles,
   settings: renderSettings,
 };
 
@@ -40,6 +43,7 @@ const ctx = {
   go(route, params = {}) {
     if (!ROUTES[route]) route = 'today';
     current = { route, params };
+    if (joinTokenFromPath()) history.replaceState(null, '', '/');
     location.hash = route === 'today' ? '' : `#${route}`;
     render();
   },
@@ -159,6 +163,12 @@ function routeFromHash() {
   const r = (location.hash || '').replace('#', '').split('?')[0];
   return ROUTES[r] ? r : 'today';
 }
+
+/** /join/<token> is a real URL so it can be pasted into a message. */
+function joinTokenFromPath() {
+  const m = location.pathname.match(/^\/join\/([A-Za-z0-9_-]{8,})\/?$/);
+  return m ? m[1] : null;
+}
 window.addEventListener('hashchange', () => {
   const r = routeFromHash();
   if (r !== current.route) { current = { route: r, params: {} }; render(); }
@@ -181,12 +191,17 @@ document.addEventListener('click', (e) => {
   const support = document.getElementById('supportBtn');
   if (support) support.href = CONFIG.kofiUrl;
 
-  current = { route: routeFromHash(), params: {} };
+  const joinToken = joinTokenFromPath();
+  current = joinToken
+    ? { route: 'circles', params: { join: joinToken } }
+    : { route: routeFromHash(), params: {} };
   document.getElementById('boot')?.remove();
   document.getElementById('app').hidden = false;
   applyIcons(document);
   render();
   onChange(() => refreshChrome());
+  syncProfile().catch(() => {});
+  resumePendingJoin();
 
   // First visit with sync available and nothing saved yet: offer to sign in.
   if (cloudCapable() && !store.user && !prefs.get('seenAuth', false) && !prayers.all().length) {
@@ -195,6 +210,22 @@ document.addEventListener('click', (e) => {
   }
 
   // Only the deployed site has a service worker; the single-file preview does not.
+  /* Somebody who clicked an invite, then signed in, should land inside the
+     circle rather than back at square one holding a link they already used. */
+  async function resumePendingJoin() {
+    if (!circlesAvailable()) return;
+    const token = pendingJoin.take();
+    if (!token) return;
+    try {
+      const info = await circlesApi.preview(token);
+      const id = await circlesApi.join(token);
+      toast(info ? `You are in ${info.name}.` : 'You joined the circle.');
+      ctx.go('circles', { id, name: info?.name });
+    } catch {
+      toast('That invite could not be used. Ask whoever sent it for a fresh link.');
+    }
+  }
+
   const hasManifest = !!document.querySelector('link[rel="manifest"]');
   if (hasManifest && 'serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});

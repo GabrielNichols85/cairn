@@ -3,6 +3,12 @@
   publish = "."
   command = ""
 
+# Invite links are real paths, so they need to reach the app rather than 404.
+[[redirects]]
+  from = "/join/*"
+  to = "/index.html"
+  status = 200
+
 [[headers]]
   for = "/*"
   [headers.values]

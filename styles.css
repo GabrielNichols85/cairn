@@ -515,3 +515,47 @@ textarea.field{resize:vertical;line-height:1.6;min-height:96px;font-family:inher
   .btn-sm{padding:9px 14px}
   .answered-actions{position:static;opacity:1;margin-top:12px;justify-content:flex-end}
 }
+
+/* ==========================================================================
+   CIRCLES
+   ========================================================================== */
+.circle-prayer{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:18px 20px;box-shadow:var(--sh-1);
+}
+.circle-prayer.is-answered{border-left:3px solid var(--gold)}
+.cp-head{display:flex;align-items:center;gap:10px;margin-bottom:11px}
+.cp-author{font-size:13.5px;font-weight:600}
+.cp-when{font-size:11.5px;color:var(--muted)}
+.cp-body{font-family:var(--serif);font-size:16.5px;line-height:1.55;letter-spacing:-.008em;white-space:pre-wrap;word-break:break-word}
+.cp-answered{margin-top:12px;display:flex;align-items:center}
+.cp-foot{display:flex;align-items:center;gap:12px;margin-top:15px;padding-top:13px;border-top:1px solid var(--line);flex-wrap:wrap}
+.cp-count{font-size:12.5px;color:var(--muted)}
+.cp-pray{
+  padding:8px 15px;border-radius:99px;font-size:13px;font-weight:600;
+  background:var(--accent);color:#fff;border:1px solid var(--accent);
+  transition:background .15s,color .15s,transform .1s;white-space:nowrap;
+}
+[data-theme="dark"] .cp-pray{color:#12211A}
+.cp-pray:hover{background:var(--accent-hover)}
+.cp-pray:active{transform:translateY(1px)}
+.cp-pray.done{background:var(--accent-soft);color:var(--accent-ink);border-color:transparent}
+.cp-pray:disabled{opacity:.55;cursor:default;transform:none}
+
+/* a shared prayer must never be mistaken for a private one */
+.note.is-shared{box-shadow:var(--sh-1), 0 0 0 2px var(--accent)}
+.note-shared{
+  position:absolute;left:0;right:0;bottom:0;padding:4px 12px;
+  font-size:10px;font-weight:600;letter-spacing:.02em;
+  background:var(--accent);color:#fff;border-radius:0 0 13px 13px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+[data-theme="dark"] .note-shared{color:#12211A}
+.wall.canvas .note.is-shared{padding-bottom:38px}
+.wall.flow .note.is-shared{padding-bottom:34px}
+.note-tool.share:hover{background:var(--accent);color:#fff}
+
+@media (max-width:860px){
+  .tabbar{grid-template-columns:repeat(6,1fr)}
+  .tab{font-size:9.5px}
+}
