@@ -10,6 +10,16 @@ import { store } from './store.js';
 const sb = () => store.sb;
 export const me = () => store.user?.id ?? null;
 export const circlesAvailable = () => Boolean(store.mode === 'cloud' && store.user && store.sb);
+/** Reading an invite happens before you have an account, so this is the weaker test. */
+export const cloudReady = () => Boolean(store.mode === 'cloud' && store.sb);
+
+/* An invite clicked while signed out is remembered across the sign-in
+   round trip, so nobody has to find the link a second time. */
+const PENDING = 'cairn:v1:pendingJoin';
+export const pendingJoin = {
+  set: (token) => { try { localStorage.setItem(PENDING, token); } catch {} },
+  take: () => { try { const t = localStorage.getItem(PENDING); localStorage.removeItem(PENDING); return t; } catch { return null; } },
+};
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 const fail = (label) => (err) => { console.warn(`[cairn] ${label}`, err); throw err; };
@@ -98,14 +108,16 @@ export const circles = {
     if (error) fail('delete circle')(error);
   },
 
-  /** What an invite points at, before you commit to joining it. */
+  /** What an invite points at, before you commit to joining it. Works signed out. */
   async preview(token) {
+    if (!cloudReady()) return null;
     const { data, error } = await sb().rpc('circle_preview', { p_token: token });
     if (error) fail('preview')(error);
     return (data ?? [])[0] ?? null;
   },
 
   async join(token) {
+    if (!cloudReady()) throw new Error('not_ready');
     const { data, error } = await sb().rpc('join_circle', { p_token: token });
     if (error) throw error;
     return data;
