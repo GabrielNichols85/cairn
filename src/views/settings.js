@@ -5,6 +5,7 @@ import { CONFIG } from '../../config.js';
 import { el } from '../util.js';
 import { store, prefs, auth, cloudCapable, isConfigured, exportAll, importAll, clearEverything, submitSuggestion } from '../store.js';
 import { modal, toast, confirmDialog } from '../ui.js';
+import { emailAvailable, loadEmailPrefs, saveEmailPrefs, EMAIL_KINDS, CADENCES } from '../emails.js';
 
 export function renderSettings(root, ctx) {
   const wrap = el('div', { class: 'wrap' });
@@ -54,6 +55,10 @@ export function renderSettings(root, ctx) {
     ));
   appearance.append(row('Theme', 'Cairn follows your device by default.', themeSeg));
   wrap.append(appearance);
+
+  /* ---------- email ---------- */
+  wrap.append(el('div', { class: 'section-label', text: 'Email' }));
+  wrap.append(emailCard(ctx));
 
   /* ---------- support ---------- */
   wrap.append(el('div', { class: 'section-label', text: 'Support & community' }));
@@ -135,6 +140,133 @@ export function renderSettings(root, ctx) {
   ));
 
   root.replaceChildren(wrap);
+}
+
+/* ============================================================
+   Email.
+
+   One switch per kind, a cadence for the check in, and a single
+   pause that covers all of it. Every change saves the moment it
+   is made, because a settings screen with a Save button is a
+   settings screen people leave without saving.
+   ============================================================ */
+function emailCard(ctx) {
+  const card = el('div', { class: 'card card-pad email-card' });
+
+  if (!emailAvailable()) {
+    card.append(row(
+      'Sign in to turn on email',
+      cloudCapable()
+        ? 'Cairn needs an account to know where to write to. Nothing is sent unless you ask for it.'
+        : 'Email needs cloud sync, which is not set up in this copy of Cairn.',
+      cloudCapable()
+        ? el('button', { class: 'btn btn-primary btn-sm', type: 'button', onclick: () => ctx.showAuth() }, 'Sign in')
+        : null,
+    ));
+    return card;
+  }
+
+  card.append(el('div', { class: 'set-s', text: 'Loading your settings…' }));
+
+  loadEmailPrefs()
+    .then((p) => {
+      if (!p) {
+        card.replaceChildren(el('div', { class: 'set-s', text: 'Your email settings could not be loaded right now. Try again in a moment.' }));
+        return;
+      }
+      card.replaceChildren(...emailRows(p));
+    })
+    .catch(() => {
+      card.replaceChildren(el('div', { class: 'set-s', text: 'Your email settings could not be loaded right now. Try again in a moment.' }));
+    });
+
+  return card;
+}
+
+function emailRows(p) {
+  const parts = [];
+  const kindRows = [];
+
+  /* the master pause, first, so it is never hunted for */
+  const pauseSwitch = toggle(!p.paused, (on) => {
+    p.paused = !on;
+    persist({ paused: p.paused });
+    kindRows.forEach((r) => r.classList.toggle('is-dim', p.paused));
+    toast(p.paused ? 'Email paused. Cairn will not write to you.' : 'Email on.');
+  });
+  parts.push(row(
+    'Send me email',
+    'One switch over everything below. Turn it off and Cairn goes quiet, without changing any of your other choices.',
+    pauseSwitch,
+  ));
+
+  EMAIL_KINDS.forEach((k) => {
+    const control = el('span', { class: 'email-control' });
+
+    if (k.cadence) {
+      let sw;
+      const seg = el('div', { class: 'seg seg-sm' },
+        ...CADENCES.map(([value, label]) =>
+          el('button', {
+            type: 'button', 'aria-pressed': String(p.checkin_every === value),
+            onclick: (ev) => {
+              p.checkin_every = value;
+              persist({ checkin_every: value });
+              [...seg.children].forEach((b) => b.setAttribute('aria-pressed', String(b === ev.currentTarget)));
+              if (!p[k.key]) { /* choosing a cadence means you want it */
+                p[k.key] = true;
+                persist({ [k.key]: true });
+                sw.querySelector('input').checked = true;
+                seg.classList.remove('is-dim');
+              }
+            },
+          }, label),
+        ));
+      if (!p[k.key]) seg.classList.add('is-dim');
+      control.append(seg);
+
+      sw = toggle(Boolean(p[k.key]), (on) => {
+        p[k.key] = on;
+        persist({ [k.key]: on });
+        seg.classList.toggle('is-dim', !on);
+      });
+      control.append(sw);
+    } else {
+      control.append(toggle(Boolean(p[k.key]), (on) => {
+        p[k.key] = on;
+        persist({ [k.key]: on });
+      }));
+    }
+
+    const r = row(k.title, k.sub, control);
+    if (p.paused) r.classList.add('is-dim');
+    kindRows.push(r);
+    parts.push(r);
+  });
+
+  parts.push(el('div', { class: 'set-s', style: 'padding-top:14px',
+    text: 'Every email carries a link that turns it off in one tap, no signing in. Your address is never sold, shared or handed to anyone.' }));
+
+  return parts;
+}
+
+/* Saves quietly. A failure says so once rather than nagging. */
+let saveTimer = null;
+let pending = {};
+function persist(patch) {
+  pending = { ...pending, ...patch };
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    const body = pending; pending = {};
+    saveEmailPrefs(body).catch(() => toast('That change could not be saved. Check your connection.'));
+  }, 400);
+}
+
+function toggle(on, onChange) {
+  const input = el('input', { type: 'checkbox' });
+  input.checked = on;
+  input.addEventListener('change', () => onChange(input.checked));
+  return el('label', { class: 'switch' }, input, el('span', { class: 'switch-track' }));
 }
 
 function row(title, sub, control) {
