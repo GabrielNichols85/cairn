@@ -573,7 +573,10 @@ textarea.field{resize:vertical;line-height:1.6;min-height:96px;font-family:inher
 .wrap-narrow{max-width:560px}
 .callout-good{background:color-mix(in srgb,var(--accent) 12%,transparent);
   border-color:color-mix(in srgb,var(--accent) 30%,transparent)}
-.link-btn{color:var(--accent);font-weight:500;text-decoration:underline;text-underline-offset:2px}
+.link-btn{color:var(--accent);font-weight:600;text-decoration:underline;text-underline-offset:3px;
+  padding:4px 6px;margin:-4px -2px;border-radius:6px}
+.link-btn:hover{background:color-mix(in srgb,var(--accent) 12%,transparent);text-decoration:none}
+.link-btn:disabled{opacity:.5}
 
 /* ---------- the offline bar ---------- */
 .netbar{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:60;
