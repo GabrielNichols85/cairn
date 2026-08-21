@@ -146,14 +146,13 @@ function authCard({ dismissible }) {
 
   const actions = el('div', { class: 'auth-actions' });
 
-  actions.append(el('button', {
-    class: 'oauth-btn', type: 'button',
-    onclick: async (e) => {
-      e.currentTarget.disabled = true;
-      try { await auth.signInWithGoogle(); }
-      catch (err) { toast(err.message || 'Sign-in failed.'); e.currentTarget.disabled = false; }
-    },
-  }, googleSvg(), 'Continue with Google'));
+  const google = el('button', { class: 'oauth-btn', type: 'button' }, googleSvg(), 'Continue with Google');
+  google.addEventListener('click', async () => {
+    google.disabled = true;
+    try { await auth.signInWithGoogle(); }
+    catch (err) { toast(err.message || 'Sign-in failed.'); google.disabled = false; }
+  });
+  actions.append(google);
 
   actions.append(el('div', { class: 'auth-div', text: 'or' }));
 
