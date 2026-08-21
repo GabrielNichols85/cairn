@@ -68,18 +68,26 @@ export function renderUnsubscribe(root, ctx, params = {}) {
         el('strong', { text: 'Done. ' }),
         `You will not get "${LABEL[kind]}" again.`,
         ' ',
-        el('button', {
-          class: 'link-btn', type: 'button',
-          onclick: async (e) => {
+        (() => {
+          /* The button has to be captured here, not read off the
+             event later. Once an async handler awaits, the event is
+             finished with and currentTarget is null. */
+          const undo = el('button', { class: 'link-btn', type: 'button' }, 'Undo');
+          undo.addEventListener('click', async () => {
+            undo.disabled = true;
             try {
               await setByToken(token, kind, true);
-              e.currentTarget.replaceWith(el('span', { text: 'Put back.' }));
+              undo.replaceWith(el('span', { text: 'Put back on.' }));
               const box = card.querySelector(`input[data-kind="${kind}"]`);
               if (box) box.checked = true;
               toast('Put back on.');
-            } catch { toast('That could not be changed. Try the switch below.'); }
-          },
-        }, 'Undo'),
+            } catch {
+              undo.disabled = false;
+              toast('That could not be changed. Try the switch below.');
+            }
+          });
+          return undo;
+        })(),
       ));
     }
 

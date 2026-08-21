@@ -160,15 +160,20 @@ function renderJoin(root, ctx, token) {
       el('p', { class: 'page-sub', style: 'margin:0 auto', text: `${info.member_count} ${info.member_count === 1 ? 'person is' : 'people are'} in this circle. You will be able to see prayers they have shared, including ones shared before you joined.` }),
       el('div', { class: 'row', style: 'justify-content:center;margin-top:20px' },
         circlesAvailable()
-          ? el('button', {
-              class: 'btn btn-primary', type: 'button',
-              onclick: (e) => {
-                e.currentTarget.disabled = true;
+          ? (() => {
+              /* The button is held in a variable rather than read
+                 back off the event. By the time the request settles
+                 the event is over and currentTarget is null, which
+                 would leave this button dead after a failure. */
+              const join = el('button', { class: 'btn btn-primary', type: 'button' }, 'Join this circle');
+              join.addEventListener('click', () => {
+                join.disabled = true;
                 circles.join(token)
                   .then((id) => { toast(`You are in ${info.name}.`); ctx.go('circles', { id, name: info.name }); })
-                  .catch(() => { toast('Could not join that circle.'); e.currentTarget.disabled = false; });
-              },
-            }, 'Join this circle')
+                  .catch(() => { toast('Could not join that circle.'); join.disabled = false; });
+              });
+              return join;
+            })()
           : el('button', {
               class: 'btn btn-primary', type: 'button',
               onclick: () => { pendingJoin.set(token); ctx.showAuth(); },
