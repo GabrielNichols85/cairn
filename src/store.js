@@ -25,6 +25,101 @@ const readLS = (k, fallback) => {
 };
 const writeLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
 
+/* ================================================================
+   Working offline.
+
+   Two pieces, and both of them matter.
+
+   The mirror is a copy of your cloud data kept in this browser.
+   Without it, signing in and then losing the network means the
+   app opens to an empty wall, which looks exactly like having
+   lost everything.
+
+   The outbox holds writes the server did not accept. A prayer
+   typed on a plane is in memory and nowhere else until something
+   remembers to send it later. That is the whole job.
+   ================================================================ */
+const uidKey = () => store.user?.id ?? 'anon';
+const mirrorKey = (what) => `cairn:v1:mirror:${uidKey()}:${what}`;
+const outboxKey = () => `cairn:v1:outbox:${uidKey()}`;
+
+export const net = {
+  online: typeof navigator === 'undefined' || navigator.onLine !== false,
+  syncing: false,
+};
+
+const outbox = {
+  all: () => readLS(outboxKey(), []),
+  /* One entry per row. A prayer edited five times offline should
+     arrive once, in its final state, not five times. */
+  add(op) {
+    const q = outbox.all().filter((x) => !(x.table === op.table && x.id === op.id));
+    q.push(op);
+    writeLS(outboxKey(), q);
+    emit();
+  },
+  drop(op) {
+    writeLS(outboxKey(), outbox.all().filter((x) => !(x.table === op.table && x.id === op.id)));
+  },
+  clear: () => writeLS(outboxKey(), []),
+  count: () => outbox.all().length,
+};
+export const pendingCount = () => (cloud() ? outbox.count() : 0);
+
+/** Send everything the server has not seen. Safe to call any time. */
+export async function flushOutbox() {
+  if (!cloud() || net.syncing) return 0;
+  const queue = outbox.all();
+  if (!queue.length) return 0;
+
+  net.syncing = true;
+  emit();
+  let sent = 0;
+  try {
+    for (const op of queue) {
+      try {
+        const { error } = op.remove
+          ? await store.sb.from(op.table).delete().eq('id', op.id)
+          : await store.sb.from(op.table).upsert({ ...op.row, user_id: store.user.id });
+        if (error) throw error;
+        outbox.drop(op);
+        net.online = true;
+        sent++;
+      } catch (err) {
+        /* Still unreachable. Leave the rest for next time rather
+           than hammering a network that is not there. */
+        console.warn('[cairn] still queued', op.table, err?.message || err);
+        break;
+      }
+    }
+  } finally {
+    net.syncing = false;
+    emit();
+  }
+  return sent;
+}
+
+/* The browser's idea of "online" is only about the local network.
+   A laptop on cafe wifi that never finished its captive portal is
+   online by that measure and reaches nothing. So retry on a timer
+   as well, quietly, and only while there is something to send. */
+if (typeof window !== 'undefined') {
+  setInterval(async () => {
+    if (!cloud() || !outbox.count() || net.syncing) return;
+    const sent = await flushOutbox();
+    if (sent) { await loadAll(); emit(); }
+  }, 60000);
+
+  window.addEventListener('online', async () => {
+    net.online = true;
+    emit();
+    const sent = await flushOutbox();
+    if (sent) await loadAll();
+    emit();
+  });
+  window.addEventListener('offline', () => { net.online = false; emit(); });
+}
+
 /* ---------- in-memory cache (source of truth for the UI) ---------- */
 const cache = { prayers: [], entries: [], readings: [] };
 
@@ -86,24 +181,79 @@ export async function initStore() {
   }
   await loadAll();
   store.ready = true;
+  /* Anything left over from the last visit goes up now. */
+  flushOutbox().then((sent) => { if (sent) loadAll().then(emit); });
   return store;
 }
 
 async function loadAll() {
   if (store.mode === 'cloud' && store.user) {
-    const [p, e, r] = await Promise.all([
-      store.sb.from('prayers').select('*').order('created_at', { ascending: false }),
-      store.sb.from('journal_entries').select('*').order('created_at', { ascending: false }),
-      store.sb.from('readings').select('*').order('day_key', { ascending: false }).limit(400),
-    ]);
+    /* Show the mirror straight away, so there is never a blank
+       wall while the network is being waited on. */
+    readMirror();
+
+    let p, e, r;
+    try {
+      [p, e, r] = await Promise.all([
+        store.sb.from('prayers').select('*').order('created_at', { ascending: false }),
+        store.sb.from('journal_entries').select('*').order('created_at', { ascending: false }),
+        store.sb.from('readings').select('*').order('day_key', { ascending: false }).limit(400),
+      ]);
+    } catch (err) {
+      console.warn('[cairn] could not reach the server, showing what is saved here', err);
+      net.online = false;
+      return;
+    }
+
+    /* A failed request and an empty account look identical if you
+       only check .data. Check the error, and keep the mirror when
+       something went wrong rather than wiping the screen. */
+    if (p.error || e.error || r.error) {
+      console.warn('[cairn] partial load, keeping the local copy', p.error || e.error || r.error);
+      net.online = false;
+      return;
+    }
+    net.online = true;
+
     cache.prayers = (p.data ?? []).map(fromRowPrayer);
     cache.entries = (e.data ?? []).map(fromRowEntry);
     cache.readings = (r.data ?? []).map(fromRowReading);
+
+    /* Anything still waiting to be sent has to survive the refresh,
+       or a reconnect would quietly undo the work done offline. */
+    applyPending();
+    writeMirror();
   } else {
     cache.prayers = readLS(LS.prayers, []);
     cache.entries = readLS(LS.entries, []);
     cache.readings = readLS(LS.readings, []);
   }
+}
+
+function readMirror() {
+  cache.prayers = readLS(mirrorKey('prayers'), cache.prayers);
+  cache.entries = readLS(mirrorKey('entries'), cache.entries);
+  cache.readings = readLS(mirrorKey('readings'), cache.readings);
+}
+function writeMirror() {
+  writeLS(mirrorKey('prayers'), cache.prayers);
+  writeLS(mirrorKey('entries'), cache.entries);
+  writeLS(mirrorKey('readings'), cache.readings);
+}
+
+/* Fold un-sent local work back over a fresh copy from the server. */
+function applyPending() {
+  const lists = { prayers: 'prayers', journal_entries: 'entries', readings: 'readings' };
+  const back = { prayers: fromRowPrayer, journal_entries: fromRowEntry, readings: fromRowReading };
+  outbox.all().forEach((op) => {
+    const key = lists[op.table];
+    if (!key) return;
+    cache[key] = cache[key].filter((x) => x.id !== op.id);
+    if (!op.remove && op.row) {
+      const item = back[op.table](op.row);
+      if (key === 'readings') cache[key].push(item); else cache[key].unshift(item);
+    }
+  });
 }
 
 /* ---------- row mappers (DB snake_case <-> app camelCase) ---------- */
@@ -131,11 +281,22 @@ const cloud = () => store.mode === 'cloud' && store.user;
 
 async function push(table, row, { remove = false } = {}) {
   if (!cloud()) return;
+  const op = { table, id: row.id, row: remove ? null : row, remove, at: Date.now() };
+
+  if (!net.online) { outbox.add(op); return; }
+
   try {
-    if (remove) await store.sb.from(table).delete().eq('id', row.id);
-    else await store.sb.from(table).upsert({ ...row, user_id: store.user.id });
+    const { error } = remove
+      ? await store.sb.from(table).delete().eq('id', row.id)
+      : await store.sb.from(table).upsert({ ...row, user_id: store.user.id });
+    if (error) throw error;
+    outbox.drop(op);
   } catch (err) {
-    console.warn(`[cairn] sync failed for ${table}`, err);
+    /* Nothing is thrown at the person writing. Their work is in the
+       outbox and in the mirror, and it goes up when the network does. */
+    console.warn(`[cairn] queued for later: ${table}`, err?.message || err);
+    net.online = false;
+    outbox.add(op);
   }
 }
 
@@ -226,7 +387,8 @@ export const prayers = {
     emit();
   },
 };
-const persistPrayers = () => { if (!cloud()) writeLS(LS.prayers, cache.prayers); };
+const persistPrayers = () =>
+  writeLS(cloud() ? mirrorKey('prayers') : LS.prayers, cache.prayers);
 
 /* ================================================================
    Journal
@@ -262,7 +424,8 @@ export const journal = {
     return e;
   },
 };
-const persistEntries = () => { if (!cloud()) writeLS(LS.entries, cache.entries); };
+const persistEntries = () =>
+  writeLS(cloud() ? mirrorKey('entries') : LS.entries, cache.entries);
 
 /* ================================================================
    Daily reading completion
@@ -298,7 +461,8 @@ export const readings = {
 
   totalDone: () => cache.readings.filter((r) => r.completedAt).length,
 };
-const persistReadings = () => { if (!cloud()) writeLS(LS.readings, cache.readings); };
+const persistReadings = () =>
+  writeLS(cloud() ? mirrorKey('readings') : LS.readings, cache.readings);
 
 /* ================================================================
    Preferences (always local — they're per-device by nature)
@@ -358,5 +522,10 @@ export function importAll(payload, { merge = true } = {}) {
 export function clearEverything() {
   cache.prayers = []; cache.entries = []; cache.readings = [];
   writeLS(LS.prayers, []); writeLS(LS.entries, []); writeLS(LS.readings, []);
+  writeLS(mirrorKey('prayers'), []); writeLS(mirrorKey('entries'), []); writeLS(mirrorKey('readings'), []);
+  outbox.clear();
   emit();
 }
+
+/* used by the offline tests to force a refresh through the same path a reconnect takes */
+export const __reloadForTest = async () => { await loadAll(); emit(); };

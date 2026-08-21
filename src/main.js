@@ -3,7 +3,7 @@
    ============================================================ */
 import { CONFIG } from '../config.js';
 import { el } from './util.js';
-import { initStore, store, prefs, prayers, auth, cloudCapable, onChange } from './store.js';
+import { initStore, store, prefs, prayers, auth, cloudCapable, onChange, net, pendingCount, flushOutbox } from './store.js';
 import { applyIcons, toast, modal } from './ui.js';
 import { renderToday } from './views/today.js';
 import { renderWall } from './views/wall.js';
@@ -11,6 +11,7 @@ import { renderAnswered } from './views/answered.js';
 import { renderJournal } from './views/journal.js';
 import { renderSettings } from './views/settings.js';
 import { renderCircles } from './views/circles.js';
+import { renderUnsubscribe } from './views/unsubscribe.js';
 import { syncProfile, circles as circlesApi, circlesAvailable, pendingJoin } from './circles.js';
 
 const ROUTES = {
@@ -20,6 +21,7 @@ const ROUTES = {
   journal: renderJournal,
   circles: renderCircles,
   settings: renderSettings,
+  unsubscribe: renderUnsubscribe,
 };
 
 let current = { route: 'today', params: {} };
@@ -43,7 +45,7 @@ const ctx = {
   go(route, params = {}) {
     if (!ROUTES[route]) route = 'today';
     current = { route, params };
-    if (joinTokenFromPath()) history.replaceState(null, '', '/');
+    if (joinTokenFromPath() || unsubscribeFromPath()) history.replaceState(null, '', '/');
     location.hash = route === 'today' ? '' : `#${route}`;
     render();
   },
@@ -73,6 +75,8 @@ function refreshChrome() {
   const badge = document.getElementById('answeredCount');
   if (badge) badge.textContent = n ? String(n) : '';
 
+  drawNetStatus();
+
   const acct = document.getElementById('sidebarAccount');
   if (acct) {
     acct.replaceChildren();
@@ -89,6 +93,48 @@ function refreshChrome() {
       acct.append(el('span', { text: 'Saved in this browser' }));
     }
   }
+}
+
+/* ============================================================
+   Offline.
+
+   Nothing is lost when the network goes, so this does not need
+   to alarm anybody. It needs to do one thing: say plainly that
+   the writing is safe and that it will go up on its own. The
+   worst version of this bar is the one that makes somebody stop
+   writing because they are not sure it counted.
+   ============================================================ */
+function drawNetStatus() {
+  const waiting = pendingCount();
+  const offline = !net.online;
+  let bar = document.getElementById('netStatus');
+
+  if (!offline && !waiting) { bar?.remove(); return; }
+
+  if (!bar) {
+    bar = el('div', { id: 'netStatus', class: 'netbar', role: 'status', 'aria-live': 'polite' });
+    document.body.append(bar);
+  }
+
+  bar.classList.toggle('netbar-waiting', !offline);
+  /* replaceChildren renders a literal "null" for a null child,
+     unlike el(), which drops them. Filter before handing it over. */
+  bar.replaceChildren(...[
+    el('span', { class: 'netdot' }),
+    el('span', {
+      text: offline
+        ? (waiting
+            ? `Offline. ${waiting} ${waiting === 1 ? 'change is' : 'changes are'} saved here and will sync when you are back.`
+            : 'Offline. Everything you write is saved here and will sync when you are back.')
+        : (net.syncing ? 'Syncing…' : `${waiting} ${waiting === 1 ? 'change' : 'changes'} still to sync.`),
+    }),
+    !offline && !net.syncing
+      ? el('button', {
+          class: 'netbar-btn', type: 'button',
+          onclick: async () => { await flushOutbox(); refreshChrome(); },
+        }, 'Try now')
+      : null,
+  ].filter(Boolean));
 }
 
 /* ---------- auth screen ---------- */
@@ -169,6 +215,15 @@ function joinTokenFromPath() {
   const m = location.pathname.match(/^\/join\/([A-Za-z0-9_-]{8,})\/?$/);
   return m ? m[1] : null;
 }
+
+/** /unsubscribe/<token>?k=<kind> is what sits at the bottom of every
+    email. It has to work signed out, so it is a real path too. */
+function unsubscribeFromPath() {
+  const m = location.pathname.match(/^\/unsubscribe\/([A-Za-z0-9]{32,})\/?$/);
+  if (!m) return null;
+  const k = new URLSearchParams(location.search).get('k');
+  return { token: m[1], kind: k || null };
+}
 window.addEventListener('hashchange', () => {
   const r = routeFromHash();
   if (r !== current.route) { current = { route: r, params: {} }; render(); }
@@ -192,9 +247,10 @@ document.addEventListener('click', (e) => {
   if (support) support.href = CONFIG.kofiUrl;
 
   const joinToken = joinTokenFromPath();
-  current = joinToken
-    ? { route: 'circles', params: { join: joinToken } }
-    : { route: routeFromHash(), params: {} };
+  const unsub = unsubscribeFromPath();
+  if (joinToken) current = { route: 'circles', params: { join: joinToken } };
+  else if (unsub) current = { route: 'unsubscribe', params: unsub };
+  else current = { route: routeFromHash(), params: {} };
   document.getElementById('boot')?.remove();
   document.getElementById('app').hidden = false;
   applyIcons(document);
@@ -204,7 +260,7 @@ document.addEventListener('click', (e) => {
   resumePendingJoin();
 
   // First visit with sync available and nothing saved yet: offer to sign in.
-  if (cloudCapable() && !store.user && !prefs.get('seenAuth', false) && !prayers.all().length) {
+  if (!unsub && cloudCapable() && !store.user && !prefs.get('seenAuth', false) && !prayers.all().length) {
     prefs.set('seenAuth', true);
     showAuthScreen({ dismissible: true });
   }
