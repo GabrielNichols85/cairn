@@ -3,7 +3,23 @@
   publish = "."
   command = ""
 
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# The one-click unsubscribe endpoint mail clients POST to.
+[[redirects]]
+  from = "/api/unsubscribe"
+  to = "/.netlify/functions/unsubscribe"
+  status = 200
+  force = true
+
 # Invite links are real paths, so they need to reach the app rather than 404.
+[[redirects]]
+  from = "/unsubscribe/*"
+  to = "/index.html"
+  status = 200
+
 [[redirects]]
   from = "/join/*"
   to = "/index.html"

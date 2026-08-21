@@ -1,0 +1,11 @@
+# Cairn
+# The app itself is worth finding. Invite links and unsubscribe
+# links are not: an indexed invite is an invite to strangers, and
+# an indexed unsubscribe token is somebody else's settings.
+User-agent: *
+Allow: /$
+Disallow: /join/
+Disallow: /unsubscribe/
+Disallow: /api/
+
+Sitemap: https://praycairn.com/sitemap.xml
