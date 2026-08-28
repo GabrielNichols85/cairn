@@ -1,0 +1,8 @@
+# Cloudflare Pages reads this instead of netlify.toml.
+#
+# Invite and unsubscribe links are real paths and must reach the app
+# rather than 404. Pages falls back to the shell on its own when there
+# is no 404.html, but saying so out loud is cheaper than finding out.
+# /api/* needs no rule: a Pages Function file serves its own path.
+/join/*         /index.html  200
+/unsubscribe/*  /index.html  200

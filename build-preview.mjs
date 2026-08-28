@@ -15,7 +15,7 @@ const MODULES = [
   '/src/circles.js', '/src/emails.js',
   '/src/views/today.js', '/src/views/wall.js', '/src/views/answered.js',
   '/src/views/journal.js', '/src/views/settings.js', '/src/views/circles.js',
-  '/src/views/unsubscribe.js', '/src/main.js',
+  '/src/views/unsubscribe.js', '/src/views/stats.js', '/src/main.js',
 ];
 
 const read = (p) => readFileSync('.' + p, 'utf8');

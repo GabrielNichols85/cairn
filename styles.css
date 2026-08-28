@@ -590,3 +590,41 @@ textarea.field{resize:vertical;line-height:1.6;min-height:96px;font-family:inher
 .netbar-waiting .netdot{background:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
 .netbar-btn{color:var(--accent);font-weight:600;font-size:13px;white-space:nowrap}
 @media (max-width:860px){ .netbar{bottom:calc(74px + env(safe-area-inset-bottom))} }
+
+/* ---------- the private numbers page ---------- */
+.stats-body{display:flex;flex-direction:column;gap:30px}
+.stats-section{display:flex;flex-direction:column}
+.section-label{font-family:inherit;font-size:12px;font-weight:600;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+
+.tile-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:16px 18px;box-shadow:var(--sh-1)}
+.tile-label{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.tile-num{font-family:var(--serif);font-size:34px;line-height:1.1;margin:6px 0 3px;
+  font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.tile-note{font-size:12.5px;color:var(--ink-2)}
+
+.funnel-row{display:flex;align-items:center;gap:14px;padding:9px 0}
+.funnel-label{font-size:14px;min-width:11.5rem;color:var(--ink)}
+.funnel-track{flex:1;height:12px;background:var(--surface-2);border-radius:99px;overflow:hidden}
+.funnel-fill{height:100%;background:var(--accent);border-radius:99px}
+.funnel-num{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;min-width:2.5rem;text-align:right}
+
+.spark-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.spark-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:14px 16px 12px;box-shadow:var(--sh-1);display:flex;flex-direction:column;gap:10px}
+.spark-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.spark-title{font-size:13px;color:var(--ink-2)}
+.spark-total{font-size:19px;font-weight:600;font-variant-numeric:tabular-nums}
+.spark-wrap{width:100%}
+.spark{width:100%;height:54px;display:block;overflow:visible}
+.spark-bar{fill:var(--accent)}
+.spark-base{stroke:var(--line-2);stroke-width:1}
+.spark-hit{fill:transparent}
+.spark-hit:hover{fill:color-mix(in srgb,var(--accent) 10%,transparent)}
+
+.stat-value{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+@media (max-width:560px){
+  .funnel-label{min-width:8.5rem;font-size:13px}
+}
