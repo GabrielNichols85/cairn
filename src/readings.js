@@ -36,43 +36,43 @@ const psalmFor = (index) => `Psalm ${(index % 150) + 1}`;
 /**
  * Work out where the reader is.
  *
- * The plan advances by chapters finished, never by a clock. Miss a
- * week and you pick up where you left off; read three in an evening
- * and all three count. The only thing a calendar day is used for is
- * the streak, which is a record of days you showed up, not a gate on
- * what you are allowed to read.
+ * One chapter a day. The day is the reader's own day: dayKey() is
+ * built from the device's local calendar date, so it turns over at
+ * midnight wherever they are standing, Belgrade or Oklahoma, and it
+ * follows them if they fly. Nothing here is a rolling 24 hour timer.
+ *
+ * The plan itself advances by chapters finished, not by dates, so
+ * missing a week costs you nothing: you come back to exactly the
+ * chapter you stopped at.
  *
  * @param {{dayKey:string, reference:string, completedAt:string|null}[]} records
- * @param {string} todayKey
- * @param {{at?:number|null}} [opts]  at: show this chapter instead of the next unread one
+ * @param {string} todayKey  local calendar date, from dayKey()
  */
-export function readingFor(records = [], todayKey, { at = null } = {}) {
+export function readingFor(records = [], todayKey) {
   const done = records.filter((r) => r.completedAt);
   const doneRefs = new Set(done.map((r) => r.reference));
 
   // The first chapter not yet finished.
   let next = 0;
   while (next < PLAN.length && doneRefs.has(PLAN[next])) next++;
-  const wrapped = next >= PLAN.length;
-  if (wrapped) next = 0;
+  if (next >= PLAN.length) next = 0;              // the whole New Testament, again
 
-  const index = at === null ? next : Math.max(0, Math.min(PLAN.length - 1, at));
-  const reference = PLAN[index];
+  // Already read today: stay on that chapter rather than dangling
+  // tomorrow's in front of somebody who is finished for the day.
+  const todayRecord = done.find((r) => r.dayKey === todayKey);
+  let index = next;
+  if (todayRecord) {
+    const at = PLAN.indexOf(todayRecord.reference);
+    index = at >= 0 ? at : Math.max(0, next - 1);
+  }
 
   return {
     index,
-    nextUnread: next,
     dayNumber: index + 1,
     total: PLAN.length,
-    primary: reference,
+    primary: PLAN[index],
     psalm: psalmFor(index),
-    /** this particular chapter is finished */
-    done: doneRefs.has(reference),
-    /** anything at all was finished today, which is what the streak counts */
-    doneToday: done.some((r) => r.dayKey === todayKey),
-    /** how many were finished today, so the app can say "that's three" */
-    countToday: done.filter((r) => r.dayKey === todayKey).length,
-    finishedWholePlan: wrapped,
+    doneToday: Boolean(todayRecord),
     nextUp: PLAN[(index + 1) % PLAN.length],
     completed: doneRefs.size,
   };

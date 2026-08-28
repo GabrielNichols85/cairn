@@ -12,6 +12,7 @@ import { renderJournal } from './views/journal.js';
 import { renderSettings } from './views/settings.js';
 import { renderCircles } from './views/circles.js';
 import { renderUnsubscribe } from './views/unsubscribe.js';
+import { renderStats } from './views/stats.js';
 import { syncProfile, circles as circlesApi, circlesAvailable, pendingJoin } from './circles.js';
 
 const ROUTES = {
@@ -22,6 +23,7 @@ const ROUTES = {
   circles: renderCircles,
   settings: renderSettings,
   unsubscribe: renderUnsubscribe,
+  stats: renderStats,
 };
 
 let current = { route: 'today', params: {} };
