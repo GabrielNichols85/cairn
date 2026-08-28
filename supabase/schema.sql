@@ -43,7 +43,9 @@ create table if not exists public.readings (
   day_key      text not null,
   reference    text,
   completed_at timestamptz,
-  unique (user_id, day_key)
+  -- One completion per chapter, not per calendar day. See
+  -- readings-by-chapter.sql for why, and for the migration.
+  unique (user_id, reference)
 );
 
 -- ---------- feature suggestions ----------
