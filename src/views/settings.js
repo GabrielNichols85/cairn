@@ -56,6 +56,18 @@ export function renderSettings(root, ctx) {
   appearance.append(row('Theme', 'Cairn follows your device by default.', themeSeg));
   wrap.append(appearance);
 
+  /* ---------- the numbers, for whoever runs Cairn ----------
+     Not a nav item. The page checks properly on the server; this
+     link is just so it can be found without typing a URL. */
+  if (store.user) {
+    const link = el('div', { class: 'card card-pad', hidden: true });
+    link.append(row('How Cairn is doing', 'Counts only, never anybody\'s words.',
+      el('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: () => ctx.go('stats') }, 'Open the numbers')));
+    wrap.append(link);
+    // only reveal it if the server agrees this account may see it
+    store.sb?.rpc('app_stats').then(({ error }) => { if (!error) link.hidden = false; }).catch(() => {});
+  }
+
   /* ---------- email ---------- */
   wrap.append(el('div', { class: 'section-label', text: 'Email' }));
   wrap.append(emailCard(ctx));

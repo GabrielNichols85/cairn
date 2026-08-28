@@ -10,11 +10,6 @@ import { prayers, readings, journal, prefs } from '../store.js';
 import { readingFor, fetchPassage, gatewayUrl, TRANSLATION } from '../readings.js';
 import { checkSvg, toast } from '../ui.js';
 
-/* Which chapter is on screen right now. Null means "wherever the
-   plan has got to". It survives a rerender but not a new day, so
-   reading ahead is a decision you make, not a place you get stuck. */
-const viewing = { day: null, at: null };
-
 /* ---------- choosing what to remember ----------
    Anniversaries first (something answered on this day in a past
    year), then rotate. Never the same one twice in a row.        */
@@ -89,15 +84,16 @@ export function renderToday(root, ctx) {
     stat(streak, streak === 1 ? 'day reading' : 'days reading'),
   ));
 
-  /* ---------- scripture ---------- */
+  /* ---------- scripture ----------
+     dayKey() is the device's own calendar date, so this rolls over
+     at midnight where the reader is, not at midnight in some server
+     room, and not 24 hours after they happened to tick the box. */
   const key = dayKey();
-  if (viewing.day !== key) { viewing.day = key; viewing.at = null; }   // a new day starts where you left off
-
-  const r = readingFor(readings.all(), key, { at: viewing.at });
+  const r = readingFor(readings.all(), key);
   const card = el('div', { class: 'card card-pad' });
 
   card.append(
-    el('div', { class: 'eyebrow', text: r.done ? 'Read' : "Today's reading" }),
+    el('div', { class: 'eyebrow', text: "Today's reading" }),
     el('div', { class: 'scripture-day' },
       el('span', { text: `Day ${r.dayNumber} of ${r.total} · the New Testament, start to finish` }),
       el('span', { class: 'translation-pill', title: 'Public domain, free to read and share' }, TRANSLATION),
@@ -109,31 +105,18 @@ export function renderToday(root, ctx) {
   card.append(passageBlock(r.psalm, { primary: false }));
 
   const cb = el('input', { type: 'checkbox' });
-  cb.checked = r.done;
+  cb.checked = r.doneToday;
   cb.addEventListener('change', () => {
     readings.setDone(key, r.primary, cb.checked);
-    // Stay on the chapter that was just ticked rather than jumping
-    // ahead under their hands. Moving on is their decision, below.
-    viewing.at = r.index;
-    if (cb.checked) toast(r.countToday >= 1 ? `That is ${r.countToday + 1} today.` : 'Marked as read. Nice.');
+    if (cb.checked) toast('Marked as read. Nice.');
     ctx.rerender();
   });
 
-  const foot = el('div', { class: 'scripture-foot' },
-    el('label', { class: 'check' }, cb, checkSvg(), el('span', { text: 'I read this' })),
+  card.append(el('div', { class: 'scripture-foot' },
+    el('label', { class: 'check' }, cb, checkSvg(), el('span', { text: 'I read this today' })),
     el('span', { class: 'spacer' }),
-  );
-
-  /* Nothing here waits on a clock. Finish one and the next is right
-     there; miss a fortnight and you are still exactly where you
-     stopped. The plan moves when you move. */
-  if (r.done && r.index + 1 < r.total) {
-    foot.append(el('button', {
-      class: 'btn btn-quiet btn-sm', type: 'button',
-      onclick: () => { viewing.at = r.index + 1; ctx.rerender(); },
-    }, `Read ${r.nextUp} →`));
-  }
-  card.append(foot);
+    el('span', { class: 'next-up', text: r.doneToday ? `Tomorrow: ${r.nextUp}` : '' }),
+  ));
   grid.append(card);
 
   /* ---------- quick actions ---------- */
