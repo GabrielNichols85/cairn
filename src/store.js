@@ -140,9 +140,18 @@ export async function flushOutbox() {
           break;
         }
         /* The server answered and refused. That is not being offline,
-           and retrying forever would pin a false "Offline" on screen.
-           Count the attempt, move on, keep the row for a later look. */
+           and retrying forever would pin a false "Offline" on screen. */
         net.online = true;
+
+        if (err?.code === '42501') {
+          /* Row level security. This row is not this person's to
+             write, so it will never be accepted and it is not their
+             work being thrown away. Let it go. */
+          console.warn(`[cairn] dropping a queued ${op.table} row that is not yours`);
+          outbox.drop(op);
+          continue;
+        }
+
         const tries = (op.tries ?? 0) + 1;
         outbox.mark(op, { tries, stuck: tries >= MAX_TRIES });
         console.warn(`[cairn] server refused ${op.table} (attempt ${tries})`, err?.message || err);
@@ -262,10 +271,17 @@ async function loadAll() {
 
     let p, e, r;
     try {
+      /* Ask for your rows and only your rows.
+         Circles widened the read policy on prayers so a circle wall
+         can show what people have shared with it. That makes an
+         unfiltered select return other people's shared prayers too,
+         and they were landing on this wall as if they were yours.
+         The circle wall fetches its own; this is the private one. */
+      const mine = store.user.id;
       [p, e, r] = await Promise.all([
-        store.sb.from('prayers').select('*').order('created_at', { ascending: false }),
-        store.sb.from('journal_entries').select('*').order('created_at', { ascending: false }),
-        store.sb.from('readings').select('*').order('day_key', { ascending: false }).limit(400),
+        store.sb.from('prayers').select('*').eq('user_id', mine).order('created_at', { ascending: false }),
+        store.sb.from('journal_entries').select('*').eq('user_id', mine).order('created_at', { ascending: false }),
+        store.sb.from('readings').select('*').eq('user_id', mine).order('day_key', { ascending: false }).limit(400),
       ]);
     } catch (err) {
       console.warn('[cairn] could not reach the server, showing what is saved here', err);
