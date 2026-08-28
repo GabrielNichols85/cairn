@@ -29,10 +29,14 @@ then look back, then reading nudge.
 - `src/emails.js` — the client side of the same.
 - `src/views/settings.js` — the Email section.
 - `src/views/unsubscribe.js` — `/unsubscribe/<token>?k=<kind>`.
-- `netlify/functions/send-emails.mjs` — runs hourly, sends at the
-  right local hour for each person.
-- `netlify/functions/unsubscribe.mjs` — `/api/unsubscribe`, the
-  one click endpoint Gmail and Outlook POST to.
+- `workers/send-emails/` — a Cloudflare Worker on an hourly cron.
+  Sends at the right local hour for each person, at most one letter
+  each per run. `wrangler.toml` holds the schedule.
+- `functions/api/unsubscribe.js` — a Cloudflare Pages Function at
+  `/api/unsubscribe`, the one click endpoint Gmail and Outlook POST
+  to.
+- `netlify/functions/` — the previous host's versions, kept until the
+  move is settled. Delete once Cloudflare has been running a while.
 
 ## Turning it on
 
@@ -41,7 +45,8 @@ then look back, then reading nudge.
    Porkbun needs **Add Record** and then **Submit Records**; the
    first button only stages it.
 3. Create an API key in Resend.
-4. In Netlify, Site settings, Environment variables, add:
+4. Set these as environment variables, on the Pages project for the
+   unsubscribe endpoint and on the Worker for the sender:
 
    | Name | Value |
    |---|---|
@@ -59,10 +64,14 @@ then look back, then reading nudge.
    row level security completely. It belongs in Netlify and
    nowhere else, never in `config.js`, which is public.
 
-5. Deploy. Netlify picks up the schedule from the function itself.
+   The Worker also wants `RUN_KEY`, any long random string, so the
+   sender can be kicked by hand at `/run` without the open internet
+   being able to make Cairn send mail.
+
+5. Deploy. The schedule comes from `wrangler.toml`.
 
 ## First run
 
-Set `DRY_RUN=1`, trigger the function once from the Netlify
-Functions tab, and read the log. It prints one line per letter it
-would have sent. When that looks right, remove `DRY_RUN`.
+Set `DRY_RUN=1`, then hit the Worker at `/run` with the `RUN_KEY`,
+and read the log. It prints one line per letter it would have sent,
+and sends nothing. When that looks right, remove `DRY_RUN`.
