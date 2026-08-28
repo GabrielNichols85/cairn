@@ -6,6 +6,7 @@
    circlesAvailable() before offering anything.
    ============================================================ */
 import { store } from './store.js';
+import { dayKey } from './util.js';
 
 const sb = () => store.sb;
 export const me = () => store.user?.id ?? null;
@@ -21,7 +22,10 @@ export const pendingJoin = {
   take: () => { try { const t = localStorage.getItem(PENDING); localStorage.removeItem(PENDING); return t; } catch { return null; } },
 };
 
-const todayKey = () => new Date().toISOString().slice(0, 10);
+/* Today, where the person is standing. toISOString would give UTC,
+   which in Oklahoma flips over at 7pm and would count an evening
+   prayer as tomorrow's. */
+const todayKey = () => dayKey();
 const fail = (label) => (err) => { console.warn(`[cairn] ${label}`, err); throw err; };
 
 /* ---------- profile, so circle mates see a name not an id ---------- */

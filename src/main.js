@@ -104,9 +104,32 @@ function refreshChrome() {
    worst version of this bar is the one that makes somebody stop
    writing because they are not sure it counted.
    ============================================================ */
+function netMessage({ offline, reallyOffline, waiting }) {
+  const changes = `${waiting} ${waiting === 1 ? 'change' : 'changes'}`;
+  if (net.syncing) return 'Syncing…';
+  if (reallyOffline) {
+    return waiting
+      ? `Offline. ${changes} saved here, and they go up when you are back.`
+      : 'Offline. Everything you write is saved here and goes up when you are back.';
+  }
+  if (offline) {
+    // Connected to something, just not to Cairn. Say that, rather than
+    // insisting they are offline while they are reading this online.
+    return waiting
+      ? `Cannot reach Cairn right now. ${changes} saved here.`
+      : 'Cannot reach Cairn right now. Everything you write is saved here.';
+  }
+  return `${changes} still to sync.`;
+}
+
 function drawNetStatus() {
   const waiting = pendingCount();
   const offline = !net.online;
+  /* Two different problems, and calling the second one the first is
+     how you end up telling somebody on perfectly good wifi that they
+     are offline. The browser knows whether it has a network; only the
+     failed request knows whether Cairn's server answered. */
+  const reallyOffline = offline && navigator.onLine === false;
   let bar = document.getElementById('netStatus');
 
   if (!offline && !waiting) { bar?.remove(); return; }
@@ -121,17 +144,16 @@ function drawNetStatus() {
      unlike el(), which drops them. Filter before handing it over. */
   bar.replaceChildren(...[
     el('span', { class: 'netdot' }),
-    el('span', {
-      text: offline
-        ? (waiting
-            ? `Offline. ${waiting} ${waiting === 1 ? 'change is' : 'changes are'} saved here and will sync when you are back.`
-            : 'Offline. Everything you write is saved here and will sync when you are back.')
-        : (net.syncing ? 'Syncing…' : `${waiting} ${waiting === 1 ? 'change' : 'changes'} still to sync.`),
-    }),
-    !offline && !net.syncing
+    el('span', { text: netMessage({ offline, reallyOffline, waiting }) }),
+    !net.syncing
       ? el('button', {
           class: 'netbar-btn', type: 'button',
-          onclick: async () => { await flushOutbox(); refreshChrome(); },
+          onclick: async () => {
+            net.online = true;              // give it the benefit of the doubt, then find out
+            refreshChrome();
+            await flushOutbox();
+            refreshChrome();
+          },
         }, 'Try now')
       : null,
   ].filter(Boolean));

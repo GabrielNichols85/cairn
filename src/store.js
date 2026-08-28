@@ -39,7 +39,29 @@ const writeLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } 
    typed on a plane is in memory and nowhere else until something
    remembers to send it later. That is the whole job.
    ================================================================ */
-const uidKey = () => store.user?.id ?? 'anon';
+/* Who this browser belongs to.
+
+   The Supabase client is fetched from a CDN, so with no network it
+   cannot load at all and the app used to fall back to "local mode",
+   which reads an empty box and shows an empty wall. That is the
+   worst possible thing for it to do: it looks exactly like having
+   lost everything. So the last signed-in id is remembered here, and
+   an offline start still knows whose data to show. */
+const LAST_USER = 'cairn:v1:lastUser';
+export const rememberUser = (u) => {
+  try {
+    if (u?.id) localStorage.setItem(LAST_USER, JSON.stringify({ id: u.id, name: u.user_metadata?.full_name || u.email || '' }));
+    else localStorage.removeItem(LAST_USER);
+  } catch {}
+};
+const lastUser = () => { try { return JSON.parse(localStorage.getItem(LAST_USER) || 'null'); } catch { return null; } };
+
+/** The account whose data belongs on screen, signed in or merely remembered. */
+const identity = () => store.user?.id ?? store.offlineUser?.id ?? null;
+/** This browser is an account's, so writes must be kept for syncing. */
+const syncs = () => Boolean(identity());
+
+const uidKey = () => identity() ?? 'anon';
 const mirrorKey = (what) => `cairn:v1:mirror:${uidKey()}:${what}`;
 const outboxKey = () => `cairn:v1:outbox:${uidKey()}`;
 
@@ -61,10 +83,33 @@ const outbox = {
   drop(op) {
     writeLS(outboxKey(), outbox.all().filter((x) => !(x.table === op.table && x.id === op.id)));
   },
+  mark(op, patch) {
+    writeLS(outboxKey(), outbox.all().map((x) =>
+      (x.table === op.table && x.id === op.id) ? { ...x, ...patch } : x));
+  },
   clear: () => writeLS(outboxKey(), []),
-  count: () => outbox.all().length,
+  /** Waiting on the network. A row the server refused is not waiting on anything. */
+  count: () => outbox.all().filter((x) => !x.stuck).length,
+  stuckCount: () => outbox.all().filter((x) => x.stuck).length,
 };
-export const pendingCount = () => (cloud() ? outbox.count() : 0);
+export const pendingCount = () => (syncs() ? outbox.count() : 0);
+export const stuckCount = () => (syncs() ? outbox.stuckCount() : 0);
+
+/* ---------------------------------------------------------------
+   "The network is gone" and "the server said no" are different
+   things, and telling somebody they are offline when they are not
+   is its own kind of bug. A refused row is not a lost connection:
+   if the answer came back at all, the connection is fine.
+   --------------------------------------------------------------- */
+function isNetworkFailure(err) {
+  // Anything the server actually answered carries a code or a status.
+  if (err && (err.code || typeof err.status === 'number')) return false;
+  const msg = String(err?.message ?? err ?? '');
+  return /failed to fetch|networkerror|load failed|network request failed|timeout|ERR_/i.test(msg)
+    || msg === '' /* an opaque throw is most likely the network */;
+}
+
+const MAX_TRIES = 4;
 
 /** Send everything the server has not seen. Safe to call any time. */
 export async function flushOutbox() {
@@ -77,6 +122,7 @@ export async function flushOutbox() {
   let sent = 0;
   try {
     for (const op of queue) {
+      if (op.stuck) continue;                 // refused before; do not block the rest
       try {
         const { error } = op.remove
           ? await store.sb.from(op.table).delete().eq('id', op.id)
@@ -86,10 +132,20 @@ export async function flushOutbox() {
         net.online = true;
         sent++;
       } catch (err) {
-        /* Still unreachable. Leave the rest for next time rather
-           than hammering a network that is not there. */
-        console.warn('[cairn] still queued', op.table, err?.message || err);
-        break;
+        if (isNetworkFailure(err)) {
+          /* Genuinely unreachable. Stop, rather than hammering a
+             network that is not there, and try again later. */
+          net.online = false;
+          console.warn('[cairn] still queued, network is down', op.table);
+          break;
+        }
+        /* The server answered and refused. That is not being offline,
+           and retrying forever would pin a false "Offline" on screen.
+           Count the attempt, move on, keep the row for a later look. */
+        net.online = true;
+        const tries = (op.tries ?? 0) + 1;
+        outbox.mark(op, { tries, stuck: tries >= MAX_TRIES });
+        console.warn(`[cairn] server refused ${op.table} (attempt ${tries})`, err?.message || err);
       }
     }
   } finally {
@@ -105,7 +161,7 @@ export async function flushOutbox() {
    as well, quietly, and only while there is something to send. */
 if (typeof window !== 'undefined') {
   setInterval(async () => {
-    if (!cloud() || !outbox.count() || net.syncing) return;
+    if (!syncs() || !outbox.count() || net.syncing) return;
     const sent = await flushOutbox();
     if (sent) { await loadAll(); emit(); }
   }, 60000);
@@ -128,6 +184,7 @@ export const store = {
   user: null,
   ready: false,
   sb: null,               // supabase client, when in cloud mode
+  offlineUser: null,      // remembered account, when the client could not load
   _listeners: new Set(),
 };
 
@@ -169,14 +226,21 @@ export async function initStore() {
       const { data } = await store.sb.auth.getSession();
       store.user = data?.session?.user ?? null;
       store.mode = 'cloud';
+      rememberUser(store.user);
       store.sb.auth.onAuthStateChange(async (_evt, session) => {
         const before = store.user?.id ?? null;
         store.user = session?.user ?? null;
+        rememberUser(store.user);
         if ((store.user?.id ?? null) !== before) { await loadAll(); emit(); }
       });
     } catch (err) {
-      console.warn('[cairn] Supabase unavailable, falling back to this browser only.', err);
+      console.warn('[cairn] Supabase could not be reached.', err);
       store.mode = 'local';
+      /* Offline, but this browser belongs to somebody. Show their
+         work from the mirror instead of an empty wall, and keep
+         anything they write for when the network comes back. */
+      store.offlineUser = lastUser();
+      if (store.offlineUser) net.online = false;
     }
   }
   await loadAll();
@@ -187,6 +251,10 @@ export async function initStore() {
 }
 
 async function loadAll() {
+  /* Remembered account but no client: everything they have is in the
+     mirror, and that is what belongs on screen. */
+  if (!cloud() && store.offlineUser) { readMirror(); return; }
+
   if (store.mode === 'cloud' && store.user) {
     /* Show the mirror straight away, so there is never a blank
        wall while the network is being waited on. */
@@ -280,10 +348,10 @@ const toRowReading = (r) => ({ id: r.id, day_key: r.dayKey, reference: r.referen
 const cloud = () => store.mode === 'cloud' && store.user;
 
 async function push(table, row, { remove = false } = {}) {
-  if (!cloud()) return;
+  if (!syncs()) return;
   const op = { table, id: row.id, row: remove ? null : row, remove, at: Date.now() };
 
-  if (!net.online) { outbox.add(op); return; }
+  if (!cloud() || !net.online) { outbox.add(op); return; }
 
   try {
     const { error } = remove
@@ -291,11 +359,12 @@ async function push(table, row, { remove = false } = {}) {
       : await store.sb.from(table).upsert({ ...row, user_id: store.user.id });
     if (error) throw error;
     outbox.drop(op);
+    net.online = true;
   } catch (err) {
     /* Nothing is thrown at the person writing. Their work is in the
        outbox and in the mirror, and it goes up when the network does. */
-    console.warn(`[cairn] queued for later: ${table}`, err?.message || err);
-    net.online = false;
+    if (isNetworkFailure(err)) net.online = false;
+    else console.warn(`[cairn] server refused ${table}`, err?.message || err);
     outbox.add(op);
   }
 }
@@ -321,6 +390,8 @@ export const auth = {
   async signOut() {
     if (store.sb) await store.sb.auth.signOut();
     store.user = null;
+    store.offlineUser = null;
+    rememberUser(null);
     await loadAll();
     emit();
   },
@@ -388,7 +459,7 @@ export const prayers = {
   },
 };
 const persistPrayers = () =>
-  writeLS(cloud() ? mirrorKey('prayers') : LS.prayers, cache.prayers);
+  writeLS(syncs() ? mirrorKey('prayers') : LS.prayers, cache.prayers);
 
 /* ================================================================
    Journal
@@ -425,7 +496,7 @@ export const journal = {
   },
 };
 const persistEntries = () =>
-  writeLS(cloud() ? mirrorKey('entries') : LS.entries, cache.entries);
+  writeLS(syncs() ? mirrorKey('entries') : LS.entries, cache.entries);
 
 /* ================================================================
    Daily reading completion
@@ -434,16 +505,23 @@ export const readings = {
   all: () => cache.readings,
   isDone: (key = dayKey()) => cache.readings.some((r) => r.dayKey === key && r.completedAt),
 
+  /**
+   * A completion is recorded against the chapter, not the calendar.
+   * You finish each chapter once, whenever you get to it. The day is
+   * still stored, because the streak is a record of days you showed
+   * up, but it is no longer a limit on how much you may read.
+   */
   setDone(key, reference, done) {
-    const existing = cache.readings.find((r) => r.dayKey === key);
+    const existing = cache.readings.find((r) => r.reference === reference);
     if (done) {
       const row = existing ?? { id: uid(), dayKey: key, reference, completedAt: null };
       row.completedAt = new Date().toISOString();
+      row.dayKey = key;
       row.reference = reference;
       if (!existing) cache.readings.unshift(row);
       persistReadings(); push('readings', toRowReading(row));
     } else if (existing) {
-      cache.readings = cache.readings.filter((r) => r.dayKey !== key);
+      cache.readings = cache.readings.filter((r) => r.reference !== reference);
       persistReadings(); push('readings', { id: existing.id }, { remove: true });
     }
     emit();
@@ -462,7 +540,7 @@ export const readings = {
   totalDone: () => cache.readings.filter((r) => r.completedAt).length,
 };
 const persistReadings = () =>
-  writeLS(cloud() ? mirrorKey('readings') : LS.readings, cache.readings);
+  writeLS(syncs() ? mirrorKey('readings') : LS.readings, cache.readings);
 
 /* ================================================================
    Preferences (always local — they're per-device by nature)
